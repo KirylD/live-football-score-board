@@ -1,5 +1,8 @@
 package org.sportradar;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 
 /**
@@ -13,6 +16,8 @@ import java.util.*;
  * @author Kiryl Drabysheuski
  */
 public class ScoreBoard {
+
+    public static final Logger log = LoggerFactory.getLogger(ScoreBoard.class);
 
     // TODO: consider concurrency, and later sort order (?)
     private final Map<Participants, Match> matches;
@@ -46,6 +51,7 @@ public class ScoreBoard {
     }
 
     public Match updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+        log.info("Update MatchScore to homeTeam [{}] and awayTeam [{}]", homeTeamScore, awayTeamScore);
         Match match = matches.get(new Participants(homeTeam, awayTeam));
         if (match == null) {
             throw new SportRadarException(
@@ -57,7 +63,15 @@ public class ScoreBoard {
     }
 
     public Match finishMatch(String homeTeam, String awayTeam) {
-        throw new UnsupportedOperationException();
+        log.info("Finish the Match between homeTeam [{}] and awayTeam [{}]", homeTeam, awayTeam);
+        Match match = matches.get(new Participants(homeTeam, awayTeam));
+        if (match == null) {
+            throw new SportRadarException("Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
+                    .formatted(homeTeam, awayTeam));
+        }
+
+        match.finish();
+        return match;
     }
 
 

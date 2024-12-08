@@ -34,6 +34,10 @@ public class Match {
         this.awayTeamScore = awayTeamScore;
     }
 
+    public void finish() {
+        this.isActive = false;
+    }
+
     public String getHomeTeam() {
         return homeTeam;
     }
