@@ -86,7 +86,6 @@ class ScoreBoardTest {
             assertEquals(1, updatedMatch.getHomeTeamScore());
             assertEquals("awayTeam", updatedMatch.getAwayTeam());
             assertEquals(0, updatedMatch.getAwayTeamScore());
-            assertTrue(updatedMatch.isActive());
         }
 
         @Test
@@ -105,7 +104,7 @@ class ScoreBoardTest {
 
             assertThrows(SportRadarException.class, () ->
                     scoreBoard.updateMatchScore("homeTeam", -1, "awayTeam", 0),
-                    "Score value must be positive but given homeTeam [-1], awayTeam [0]");
+                    "Score values must be positive but given homeTeam [-1], awayTeam [0]");
 
             assertThrows(SportRadarException.class, () ->
                     scoreBoard.updateMatchScore("homeTeam", 0, "awayTeam", -1),

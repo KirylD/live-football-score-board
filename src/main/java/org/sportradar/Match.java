@@ -1,5 +1,7 @@
 package org.sportradar;
 
+import org.sportradar.ScoreBoard.SportRadarException;
+
 public class Match {
 
     private final String homeTeam;
@@ -24,6 +26,10 @@ public class Match {
     }
 
     public void updateScore(int homeTeamScore, int awayTeamScore) {
+        if (homeTeamScore < 0 || awayTeamScore < 0)
+            throw new SportRadarException("Score values must be positive but given homeTeam [%s], awayTeam [%s]"
+                    .formatted(homeTeamScore, awayTeamScore));
+
         this.homeTeamScore = homeTeamScore;
         this.awayTeamScore = awayTeamScore;
     }

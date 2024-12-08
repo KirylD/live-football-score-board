@@ -46,7 +46,14 @@ public class ScoreBoard {
     }
 
     public Match updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
-        throw new UnsupportedOperationException();
+        Match match = matches.get(new Participants(homeTeam, awayTeam));
+        if (match == null) {
+            throw new SportRadarException(
+                    "Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
+                            .formatted(homeTeam, awayTeam));
+        }
+        match.updateScore(homeTeamScore, awayTeamScore);
+        return match;
     }
 
     public Match finishMatch(String homeTeam, String awayTeam) {
@@ -99,6 +106,14 @@ public class ScoreBoard {
             int result = homeTeam.hashCode();
             result = 31 * result + awayTeam.hashCode();
             return result;
+        }
+
+        @Override
+        public String toString() {
+            return "Participants{" +
+                    "homeTeam='" + homeTeam + '\'' +
+                    ", awayTeam='" + awayTeam + '\'' +
+                    '}';
         }
     }
 
