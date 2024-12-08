@@ -3,24 +3,24 @@ package org.sportradar;
 public class Match {
 
     private final String homeTeam;
-    private int homeTeamScore;
+    private int homeTeamScore = 0;
 
     private final String awayTeam;
-    private int awayTeamScore;
+    private int awayTeamScore = 0;
+
+    private boolean isActive = true;
 
     public Match(String homeTeam, String awayTeam) {
         this.homeTeam = homeTeam;
-        this.homeTeamScore = 0;
-
         this.awayTeam = awayTeam;
-        this.awayTeamScore = 0;
     }
 
-    public Match(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+    protected Match(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore, boolean isActive) {
         this.homeTeam = homeTeam;
         this.homeTeamScore = homeTeamScore;
         this.awayTeam = awayTeam;
         this.awayTeamScore = awayTeamScore;
+        this.isActive = isActive;
     }
 
     public void updateScore(int homeTeamScore, int awayTeamScore) {
@@ -42,5 +42,27 @@ public class Match {
 
     public int getAwayTeamScore() {
         return awayTeamScore;
+    }
+
+    public boolean isActive() {
+        return isActive;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Match match = (Match) o;
+
+        if (!homeTeam.equals(match.homeTeam)) return false;
+        return awayTeam.equals(match.awayTeam);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = homeTeam.hashCode();
+        result = 31 * result + awayTeam.hashCode();
+        return result;
     }
 }
