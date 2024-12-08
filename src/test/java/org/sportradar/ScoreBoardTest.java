@@ -3,8 +3,7 @@ package org.sportradar;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ScoreBoardTest {
 
@@ -38,6 +37,34 @@ class ScoreBoardTest {
             // Then: verify the new match has been saved in ScoreBoard and became available
             assertEquals(1, scoreBoard.getSummary().size());
             assertEquals(newMatch, scoreBoard.getSummary().getFirst());
+        }
+        @Test
+        void startNewMatch_MatchAlreadyRun() {
+            // Given
+            ScoreBoard scoreBoard = new ScoreBoard();
+            Match newMatch = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+
+            // When start match which had been already started, then throw exception
+            assertThrows(ScoreBoard.SportRadarException.class,
+                    () -> scoreBoard.startNewMatch("homeTeam", "awayTeam"));
+        }
+
+        // Verify expected error message per use case
+        @Test
+        void validateTeamsBlankOrNull() {
+            ScoreBoard scoreBoard = new ScoreBoard();
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.startNewMatch("", "awayTeam"));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.startNewMatch("homeTeam", ""));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.startNewMatch(null, "awayTeam"));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.startNewMatch("homeTeam", null));
         }
     }
 
