@@ -2,9 +2,16 @@ package org.sportradar;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.sportradar.ScoreBoard.Participants;
 import org.sportradar.ScoreBoard.SportRadarException;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.HashMap;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 class ScoreBoardTest {
 
@@ -39,6 +46,7 @@ class ScoreBoardTest {
             assertEquals(1, scoreBoard.getSummary().size());
             assertEquals(newMatch, scoreBoard.getSummary().getFirst());
         }
+
         @Test
         void matchAlreadyRun() {
             // Given
@@ -93,7 +101,7 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(SportRadarException.class, () ->
-                    scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0),
+                            scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0),
                     "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
         }
 
@@ -102,20 +110,69 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
-            assertThrows(SportRadarException.class, () ->
-                    scoreBoard.updateMatchScore("homeTeam", -1, "awayTeam", 0),
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.updateMatchScore("homeTeam", -1, "awayTeam", 0),
                     "Score values must be positive but given homeTeam [-1], awayTeam [0]");
 
-            assertThrows(SportRadarException.class, () ->
-                    scoreBoard.updateMatchScore("homeTeam", 0, "awayTeam", -1),
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.updateMatchScore("homeTeam", 0, "awayTeam", -1),
                     "Score value must be positive but given homeTeam [0], awayTeam [-1]");
         }
 
     }
 
-    @Test
-    void finishMatch() {
-        ScoreBoard scoreBoard = new ScoreBoard();
+    @Nested
+    public class FinishMatch {
+        @Test
+        void finishMatch() {
+            // Given
+            HashMap<Participants, Match> matches = new HashMap<>();
+            matches.put(new Participants("homeTeam", "awayTeam"),
+                    new Match("homeTeam", "awayTeam"));
+
+            ScoreBoard scoreBoard = new ScoreBoard(matches);
+
+            // When
+            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
+
+            // Then matched finished
+            assertEquals("homeTeam", finishedMatch.getHomeTeam());
+            assertEquals(0, finishedMatch.getHomeTeamScore());
+            assertEquals("awayTeam", finishedMatch.getAwayTeam());
+            assertEquals(0, finishedMatch.getAwayTeamScore());
+            assertFalse(finishedMatch.isActive());
+        }
+
+        @Test
+        void validateMatchNotExists() {
+            // Given
+            ScoreBoard scoreBoard = new ScoreBoard();
+
+            // When
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.finishMatch("homeTeam", "awayTeam"),
+                    "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
+        }
+
+        @Test
+        void idempotentFinish() {
+            // Given
+            HashMap<Participants, Match> matches = new HashMap<>();
+            matches.put(new Participants("homeTeam", "awayTeam"),
+                    new Match("homeTeam", 0, "awayTeam", 1, false));
+
+            ScoreBoard scoreBoard = new ScoreBoard(matches);
+
+            // When: no errors when finish the already finished Match. Allow clients idempotency & retry
+            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
+
+            // Then
+            assertEquals("homeTeam", finishedMatch.getHomeTeam());
+            assertEquals(0, finishedMatch.getHomeTeamScore());
+            assertEquals("awayTeam", finishedMatch.getAwayTeam());
+            assertEquals(1, finishedMatch.getAwayTeamScore());
+            assertFalse(finishedMatch.isActive());
+        }
 
     }
 
