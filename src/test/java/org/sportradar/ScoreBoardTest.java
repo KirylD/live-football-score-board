@@ -75,6 +75,14 @@ class ScoreBoardTest {
             assertThrows(IllegalArgumentException.class,
                     () -> scoreBoard.startNewMatch("homeTeam", null));
         }
+
+        @Test
+        void validateTheSameTeams() {
+            ScoreBoard scoreBoard = new ScoreBoard();
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.startNewMatch("homeTeam", "homeTeam"));
+        }
     }
 
     @Nested
@@ -119,6 +127,13 @@ class ScoreBoardTest {
                     "Score value must be positive but given homeTeam [0], awayTeam [-1]");
         }
 
+        @Test
+        void validateTheSameTeams() {
+            ScoreBoard scoreBoard = new ScoreBoard();
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.updateMatchScore("homeTeam", 1, "homeTeam", 0));
+        }
     }
 
     @Nested
@@ -172,6 +187,14 @@ class ScoreBoardTest {
             assertEquals("awayTeam", finishedMatch.getAwayTeam());
             assertEquals(1, finishedMatch.getAwayTeamScore());
             assertFalse(finishedMatch.isActive());
+        }
+
+        @Test
+        void validateTheSameTeams() {
+            ScoreBoard scoreBoard = new ScoreBoard();
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> scoreBoard.finishMatch("homeTeam", "homeTeam"));
         }
 
     }

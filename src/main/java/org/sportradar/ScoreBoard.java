@@ -87,10 +87,12 @@ public class ScoreBoard {
         private final String awayTeam;
 
         public Participants(String homeTeam, String awayTeam) {
-            if (homeTeam == null || homeTeam.isBlank())
-                throw new IllegalArgumentException("homeTeam param can't be Blank or null");
-            if (awayTeam == null || awayTeam.isBlank())
-                throw new IllegalArgumentException("awayTeam param can't be Blank or null");
+            if ((homeTeam == null || homeTeam.isBlank()) || (awayTeam == null || awayTeam.isBlank()))
+                throw new IllegalArgumentException("homeTeam [%s] & awayTeam [%s] params can't be Blank or null"
+                        .formatted(homeTeam, awayTeam));
+            if (homeTeam.equals(awayTeam))
+                throw new IllegalArgumentException("homeTeam can't be equal awayTeam: " + homeTeam);
+
 
             this.homeTeam = homeTeam;
             this.awayTeam = awayTeam;
