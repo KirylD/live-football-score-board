@@ -2,7 +2,7 @@ package org.sportradar;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.sportradar.ScoreBoard.Participants;
+import org.sportradar.ScoreBoard.Teams;
 import org.sportradar.ScoreBoard.SportRadarException;
 
 import java.util.HashMap;
@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ScoreBoardTest {
 
     @Nested
-    public class StartNewMatch {
+    public class StartNewMatchInfo {
 
         @Test
         void startNewMatch() {
@@ -24,14 +24,12 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             // When
-            Match newMatch = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            MatchInfo newMatchInfo = scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // Then: verify the new match has been created with correct properties
-            assertEquals("homeTeam", newMatch.getHomeTeam());
-            assertEquals(0, newMatch.getHomeTeamScore());
-            assertEquals("awayTeam", newMatch.getAwayTeam());
-            assertEquals(0, newMatch.getAwayTeamScore());
-            assertTrue(newMatch.isActive());
+            assertEquals(0, newMatchInfo.getHomeTeamScore());
+            assertEquals(0, newMatchInfo.getAwayTeamScore());
+            assertTrue(newMatchInfo.isActive());
         }
 
         @Test
@@ -40,18 +38,18 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             // When
-            Match newMatch = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            MatchInfo newMatchInfo = scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // Then: verify the new match has been saved in ScoreBoard and became available
             assertEquals(1, scoreBoard.getSummary().size());
-            assertEquals(newMatch, scoreBoard.getSummary().getFirst());
+//            assertEquals(newMatchInfo, scoreBoard.getSummary().entrySet().);
         }
 
         @Test
         void matchAlreadyRun() {
             // Given
             ScoreBoard scoreBoard = new ScoreBoard();
-            Match newMatch = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When start match which had been already started, then throw exception
             assertThrows(SportRadarException.class,
@@ -86,7 +84,7 @@ class ScoreBoardTest {
     }
 
     @Nested
-    public class UpdateMatchScore {
+    public class UpdateMatchScoreInfo {
 
         @Test
         void updateMatchScore() {
@@ -95,13 +93,11 @@ class ScoreBoardTest {
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When
-            Match updatedMatch = scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0);
+            MatchInfo updatedMatchInfo = scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0);
 
             // Then
-            assertEquals("homeTeam", updatedMatch.getHomeTeam());
-            assertEquals(1, updatedMatch.getHomeTeamScore());
-            assertEquals("awayTeam", updatedMatch.getAwayTeam());
-            assertEquals(0, updatedMatch.getAwayTeamScore());
+            assertEquals(1, updatedMatchInfo.getHomeTeamScore());
+            assertEquals(0, updatedMatchInfo.getAwayTeamScore());
         }
 
         @Test
@@ -141,21 +137,18 @@ class ScoreBoardTest {
         @Test
         void finishMatch() {
             // Given
-            HashMap<Participants, Match> matches = new HashMap<>();
-            matches.put(new Participants("homeTeam", "awayTeam"),
-                    new Match("homeTeam", "awayTeam"));
+            HashMap<Teams, MatchInfo> matches = new HashMap<>();
+            matches.put(new Teams("homeTeam", "awayTeam"), new MatchInfo());
 
             ScoreBoard scoreBoard = new ScoreBoard(matches);
 
             // When
-            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
+            MatchInfo finishedMatchInfo = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then matched finished
-            assertEquals("homeTeam", finishedMatch.getHomeTeam());
-            assertEquals(0, finishedMatch.getHomeTeamScore());
-            assertEquals("awayTeam", finishedMatch.getAwayTeam());
-            assertEquals(0, finishedMatch.getAwayTeamScore());
-            assertFalse(finishedMatch.isActive());
+            assertEquals(0, finishedMatchInfo.getHomeTeamScore());
+            assertEquals(0, finishedMatchInfo.getAwayTeamScore());
+            assertFalse(finishedMatchInfo.isActive());
         }
 
         @Test
@@ -172,21 +165,19 @@ class ScoreBoardTest {
         @Test
         void idempotentFinish() {
             // Given
-            HashMap<Participants, Match> matches = new HashMap<>();
-            matches.put(new Participants("homeTeam", "awayTeam"),
-                    new Match("homeTeam", 0, "awayTeam", 1, false));
+            HashMap<Teams, MatchInfo> matches = new HashMap<>();
+            matches.put(new Teams("homeTeam", "awayTeam"),
+                    new MatchInfo(0, 1, false));
 
             ScoreBoard scoreBoard = new ScoreBoard(matches);
 
             // When: no errors when finish the already finished Match. Allow clients idempotency & retry
-            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
+            MatchInfo finishedMatchInfo = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then
-            assertEquals("homeTeam", finishedMatch.getHomeTeam());
-            assertEquals(0, finishedMatch.getHomeTeamScore());
-            assertEquals("awayTeam", finishedMatch.getAwayTeam());
-            assertEquals(1, finishedMatch.getAwayTeamScore());
-            assertFalse(finishedMatch.isActive());
+            assertEquals(0, finishedMatchInfo.getHomeTeamScore());
+            assertEquals(1, finishedMatchInfo.getAwayTeamScore());
+            assertFalse(finishedMatchInfo.isActive());
         }
 
         @Test

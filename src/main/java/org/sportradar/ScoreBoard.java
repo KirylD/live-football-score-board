@@ -20,10 +20,10 @@ public class ScoreBoard {
     public static final Logger log = LoggerFactory.getLogger(ScoreBoard.class);
 
     // TODO: consider concurrency, and later sort order (?)
-    private final Map<Participants, Match> matches;
+    private final Map<Teams, MatchInfo> matches;
 
     // Only for internal 'sportradar' usage
-    protected ScoreBoard(Map<Participants, Match> matches) {
+    protected ScoreBoard(Map<Teams, MatchInfo> matches) {
         this.matches = matches;
     }
 
@@ -32,61 +32,61 @@ public class ScoreBoard {
     }
 
     /**
-     * Starts a new {@link Match} with the given participants.
+     * Starts a new {@link MatchInfo} with the given participants.
      *
      * @param homeTeam the team which plays at home
      * @param awayTeam the team which plays away
      * @return the started Match
      */
-    public Match startNewMatch(String homeTeam, String awayTeam) {
-        Participants participants = new Participants(homeTeam, awayTeam);
-        if (matches.containsKey(participants)) {
+    public MatchInfo startNewMatch(String homeTeam, String awayTeam) {
+        Teams teams = new Teams(homeTeam, awayTeam);
+        if (matches.containsKey(teams)) {
             throw new SportRadarException(
                     "Match with the given 'homeTeam' [%s] and 'awayTeam'[%s] already run."
                             .formatted(homeTeam, awayTeam));
         }
-        Match match = new Match(homeTeam, awayTeam);
-        matches.put(participants, match);
-        return match;
+        MatchInfo matchInfo = new MatchInfo();
+        matches.put(teams, matchInfo);
+        return matchInfo;
     }
 
-    public Match updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+    public MatchInfo updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
         log.info("Update MatchScore to homeTeam [{}] and awayTeam [{}]", homeTeamScore, awayTeamScore);
-        Match match = matches.get(new Participants(homeTeam, awayTeam));
-        if (match == null) {
+        MatchInfo matchInfo = matches.get(new Teams(homeTeam, awayTeam));
+        if (matchInfo == null) {
             throw new SportRadarException(
                     "Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
                             .formatted(homeTeam, awayTeam));
         }
-        match.updateScore(homeTeamScore, awayTeamScore);
-        return match;
+        matchInfo.updateScore(homeTeamScore, awayTeamScore);
+        return matchInfo;
     }
 
-    public Match finishMatch(String homeTeam, String awayTeam) {
+    public MatchInfo finishMatch(String homeTeam, String awayTeam) {
         log.info("Finish the Match between homeTeam [{}] and awayTeam [{}]", homeTeam, awayTeam);
-        Match match = matches.get(new Participants(homeTeam, awayTeam));
-        if (match == null) {
+        MatchInfo matchInfo = matches.get(new Teams(homeTeam, awayTeam));
+        if (matchInfo == null) {
             throw new SportRadarException("Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
                     .formatted(homeTeam, awayTeam));
         }
 
-        match.finish();
-        return match;
+        matchInfo.finish();
+        return matchInfo;
     }
 
 
     // TODO: Cache the summary, as it's likely the Read rate is much higher than Update and it's expensive
     // return read-only copies, do not allow clients to update objects directly
-    public List<Match> getSummary() {
-        return matches.values().stream().toList();
+    public Map<Teams, MatchInfo> getSummary() {
+        return matches;
     }
 
 
-    public static class Participants {
+    public static class Teams {
         private final String homeTeam;
         private final String awayTeam;
 
-        public Participants(String homeTeam, String awayTeam) {
+        public Teams(String homeTeam, String awayTeam) {
             if ((homeTeam == null || homeTeam.isBlank()) || (awayTeam == null || awayTeam.isBlank()))
                 throw new IllegalArgumentException("homeTeam [%s] & awayTeam [%s] params can't be Blank or null"
                         .formatted(homeTeam, awayTeam));
@@ -111,7 +111,7 @@ public class ScoreBoard {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            Participants that = (Participants) o;
+            Teams that = (Teams) o;
 
             if (!homeTeam.equals(that.homeTeam)) return false;
             return awayTeam.equals(that.awayTeam);
