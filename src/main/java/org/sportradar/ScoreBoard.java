@@ -42,7 +42,7 @@ public class ScoreBoard {
      * @param awayTeam the team which plays away
      * @return the started Match
      */
-    public MatchInfo startNewMatch(String homeTeam, String awayTeam) {
+    public Match startNewMatch(String homeTeam, String awayTeam) {
         Teams teams = new Teams(homeTeam, awayTeam);
         if (matches.containsKey(teams)) {
             throw new SportRadarException(
@@ -51,19 +51,21 @@ public class ScoreBoard {
         }
         MatchInfo matchInfo = new MatchInfo();
         matches.put(teams, matchInfo);
-        return matchInfo;
+
+        return createMatch(teams, matchInfo);
     }
 
-    public MatchInfo updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+    public Match updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
         log.info("Update MatchScore to homeTeam [{}] and awayTeam [{}]", homeTeamScore, awayTeamScore);
-        MatchInfo matchInfo = matches.get(new Teams(homeTeam, awayTeam));
+        Teams teams = new Teams(homeTeam, awayTeam);
+        MatchInfo matchInfo = matches.get(teams);
         if (matchInfo == null) {
             throw new SportRadarException(
                     "Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
                             .formatted(homeTeam, awayTeam));
         }
         matchInfo.updateScore(homeTeamScore, awayTeamScore);
-        return matchInfo;
+        return createMatch(teams, matchInfo);
     }
 
     /**
@@ -73,16 +75,17 @@ public class ScoreBoard {
      * @param awayTeam the team which plays away
      * @return the finished Match
      */
-    public MatchInfo finishMatch(String homeTeam, String awayTeam) {
+    public Match finishMatch(String homeTeam, String awayTeam) {
         log.info("Finish the Match between homeTeam [{}] and awayTeam [{}]", homeTeam, awayTeam);
-        MatchInfo matchInfo = matches.get(new Teams(homeTeam, awayTeam));
+        Teams teams = new Teams(homeTeam, awayTeam);
+        MatchInfo matchInfo = matches.get(teams);
         if (matchInfo == null) {
             throw new SportRadarException("Match 'homeTeam' [%s] and 'awayTeam' [%s] doesn't exist"
                     .formatted(homeTeam, awayTeam));
         }
 
         matchInfo.finish();
-        return matchInfo;
+        return createMatch(teams, matchInfo);
     }
 
 
@@ -106,9 +109,13 @@ public class ScoreBoard {
         for (Map.Entry<Teams, MatchInfo> entry : matches.entrySet()) {
             Teams teams = entry.getKey();
             MatchInfo matchInfo = entry.getValue();
-            result.add(new Match(teams.homeTeam, matchInfo.getHomeTeamScore(), teams.getAwayTeam(), matchInfo.getAwayTeamScore(), matchInfo.isActive(), matchInfo.getStartedAt()));
+            result.add(createMatch(teams, matchInfo));
         }
         return List.copyOf(result);
+    }
+
+    private static Match createMatch(Teams teams, MatchInfo matchInfo) {
+        return new Match(teams.homeTeam, matchInfo.getHomeTeamScore(), teams.getAwayTeam(), matchInfo.getAwayTeamScore(), matchInfo.isActive(), matchInfo.getStartedAt());
     }
 
     /**
@@ -135,6 +142,30 @@ public class ScoreBoard {
             this.awayTeamScore = awayTeamScore;
             this.isActive = isActive;
             this.startedAt = startedAt;
+        }
+
+        public String getHomeTeam() {
+            return homeTeam;
+        }
+
+        public int getHomeTeamScore() {
+            return homeTeamScore;
+        }
+
+        public String getAwayTeam() {
+            return awayTeam;
+        }
+
+        public int getAwayTeamScore() {
+            return awayTeamScore;
+        }
+
+        public boolean isActive() {
+            return isActive;
+        }
+
+        public Instant getStartedAt() {
+            return startedAt;
         }
 
         @Override

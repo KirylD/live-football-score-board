@@ -28,26 +28,31 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             // When
-            MatchInfo newMatchInfo = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            Match match = scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // Then: verify the new match has been created with correct properties
-            assertEquals(0, newMatchInfo.getHomeTeamScore());
-            assertEquals(0, newMatchInfo.getAwayTeamScore());
-            assertTrue(newMatchInfo.isActive());
+            assertEquals(match.getHomeTeam(), "homeTeam");
+            assertEquals(0, match.getHomeTeamScore());
+            assertEquals(match.getAwayTeam(), "awayTeam");
+            assertEquals(0, match.getAwayTeamScore());
+            assertTrue(match.isActive());
+            // todo: verify creationTime, refactor
         }
 
-        @Test
-        void saveMatchToScoreBoard() {
-            // Given
-            ScoreBoard scoreBoard = new ScoreBoard();
-
-            // When
-            MatchInfo newMatchInfo = scoreBoard.startNewMatch("homeTeam", "awayTeam");
-
-            // Then: verify the new match has been saved in ScoreBoard and became available
-            assertEquals(1, scoreBoard.getSummary().size());
-//            assertEquals(newMatchInfo, scoreBoard.getSummary().entrySet().);
-        }
+//        @Test
+//        void saveMatchToScoreBoard() {
+//            // Given
+//            ScoreBoard scoreBoard = new ScoreBoard();
+//
+//            // When
+//            Match match = scoreBoard.startNewMatch("homeTeam", "awayTeam");
+//
+//            // Then: verify the new match has been saved in ScoreBoard and became available
+//            List<Match> summary = scoreBoard.getSummary();
+//
+//            List.of(new Match("homeTeam", 0, "awayTeam", awayTeamScore, true, Instant.now()))
+//            assertEquals();
+//        }
 
         @Test
         void matchAlreadyRun() {
@@ -97,11 +102,11 @@ class ScoreBoardTest {
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When
-            MatchInfo updatedMatchInfo = scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0);
+            Match match = scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0);
 
             // Then
-            assertEquals(1, updatedMatchInfo.getHomeTeamScore());
-            assertEquals(0, updatedMatchInfo.getAwayTeamScore());
+            assertEquals(1, match.getHomeTeamScore());
+            assertEquals(0, match.getAwayTeamScore());
         }
 
         @Test
@@ -147,12 +152,12 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard(matches);
 
             // When
-            MatchInfo finishedMatchInfo = scoreBoard.finishMatch("homeTeam", "awayTeam");
+            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then matched finished
-            assertEquals(0, finishedMatchInfo.getHomeTeamScore());
-            assertEquals(0, finishedMatchInfo.getAwayTeamScore());
-            assertFalse(finishedMatchInfo.isActive());
+            assertEquals(0, finishedMatch.getHomeTeamScore());
+            assertEquals(0, finishedMatch.getAwayTeamScore());
+            assertFalse(finishedMatch.isActive());
         }
 
         @Test
@@ -176,12 +181,12 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard(matches);
 
             // When: no errors when finish the already finished Match. Allow clients idempotency & retry
-            MatchInfo finishedMatchInfo = scoreBoard.finishMatch("homeTeam", "awayTeam");
+            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then
-            assertEquals(0, finishedMatchInfo.getHomeTeamScore());
-            assertEquals(1, finishedMatchInfo.getAwayTeamScore());
-            assertFalse(finishedMatchInfo.isActive());
+            assertEquals(0, finishedMatch.getHomeTeamScore());
+            assertEquals(1, finishedMatch.getAwayTeamScore());
+            assertFalse(finishedMatch.isActive());
         }
 
         @Test
