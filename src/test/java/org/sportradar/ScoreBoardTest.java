@@ -4,11 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.sportradar.ScoreBoard.Match;
-import org.sportradar.ScoreBoard.Teams;
 import org.sportradar.ScoreBoard.SportRadarException;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,6 +15,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
+/**
+ * Tests the {@link ScoreBoard} class.
+ * <p>
+ * The test favors Black box over White box testing to more rely on behavior of public API rather than on
+ * the implementation details. To favor the verification of contract and what clients inspect in real life
+ * with less dependencies (less maintenance) on the implementation details.
+ * <p>
+ * Functional testing (public API and expected behavior) is preferred
+ * over unit tests (testing the implementation with more maintenance).
+ */
 class ScoreBoardTest {
 
     @Nested
@@ -110,6 +118,29 @@ class ScoreBoardTest {
         }
 
         @Test
+        void updateInactiveMatch() {
+            // Given
+            ScoreBoard scoreBoard = new ScoreBoard();
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            scoreBoard.finishMatch("homeTeam", "awayTeam");
+
+            // When
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0));
+        }
+
+        @Test
+        void updateNotExistingMatch() {
+            // Given
+            ScoreBoard scoreBoard = new ScoreBoard();
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
+
+            // When-Then
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.updateMatchScore("homeTeamTypo", 1, "awayTeam", 0));
+        }
+
+        @Test
         void validateMatchDoesNotExist() {
             ScoreBoard scoreBoard = new ScoreBoard();
 
@@ -146,16 +177,16 @@ class ScoreBoardTest {
         @Test
         void finishMatch() {
             // Given
-            HashMap<Teams, MatchInfo> matches = new HashMap<>();
-            matches.put(new Teams("homeTeam", "awayTeam"), new MatchInfo());
-
-            ScoreBoard scoreBoard = new ScoreBoard(matches);
+            ScoreBoard scoreBoard = new ScoreBoard();
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When
             Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then matched finished
+            assertEquals("homeTeam", finishedMatch.getHomeTeam());
             assertEquals(0, finishedMatch.getHomeTeamScore());
+            assertEquals("awayTeam", finishedMatch.getAwayTeam());
             assertEquals(0, finishedMatch.getAwayTeamScore());
             assertFalse(finishedMatch.isActive());
         }
@@ -172,21 +203,14 @@ class ScoreBoardTest {
         }
 
         @Test
-        void idempotentFinish() {
+        void finishInactiveMatch() {
             // Given
-            HashMap<Teams, MatchInfo> matches = new HashMap<>();
-            matches.put(new Teams("homeTeam", "awayTeam"),
-                    new MatchInfo(0, 1, false));
+            ScoreBoard scoreBoard = new ScoreBoard();
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
+            scoreBoard.finishMatch("homeTeam", "awayTeam");
 
-            ScoreBoard scoreBoard = new ScoreBoard(matches);
-
-            // When: no errors when finish the already finished Match. Allow clients idempotency & retry
-            Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
-
-            // Then
-            assertEquals(0, finishedMatch.getHomeTeamScore());
-            assertEquals(1, finishedMatch.getAwayTeamScore());
-            assertFalse(finishedMatch.isActive());
+            assertThrows(SportRadarException.class,
+                    () -> scoreBoard.finishMatch("homeTeam", "awayTeam"));
         }
 
         @Test
@@ -245,6 +269,7 @@ class ScoreBoardTest {
             );
             assertEquals(expectedSummary, summary);
         }
+
         @Test
         void getSummary_OnlyActiveMatches() {
             // Given
