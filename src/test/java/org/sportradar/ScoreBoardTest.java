@@ -1,11 +1,15 @@
 package org.sportradar;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.sportradar.ScoreBoard.Match;
 import org.sportradar.ScoreBoard.Teams;
 import org.sportradar.ScoreBoard.SportRadarException;
 
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -190,7 +194,104 @@ class ScoreBoardTest {
 
     }
 
-    @Test
-    void getSummary() {
+    @Nested
+    public class Summary {
+
+        private ScoreBoard scoreBoard;
+
+        @BeforeEach
+        public void setUp() {
+            scoreBoard = new ScoreBoard();
+        }
+
+        @Test
+        void getSummary_orderedByTotalScore() {
+            // Given
+            startMatchWithScore("Germany", 2, "France", 2);
+            startMatchWithScore("Mexico", 0, "Canada", 5);
+            startMatchWithScore("Spain", 10, "Brazil", 2);
+
+            // When
+            List<Match> summary = scoreBoard.getSummary();
+
+            // Then
+            List<Match> expectedSummary = List.of(
+                    createMatch("Spain", 10, "Brazil", 2),
+                    createMatch("Maxico", 0, "Canada", 5),
+                    createMatch("Germany", 2, "France", 2)
+            );
+            assertEquals(expectedSummary, summary);
+        }
+
+        // TODO: refactor to allow to test Instant (time)
+        @Test
+        void getSummary_orderedByTotalScore_andMostRecentlyStarted() {
+            // Given
+            startMatchWithScore("Spain", 10, "Brazil", 2);
+            startMatchWithScore("Uruguay", 6, "Italy", 6);
+
+            // When
+            List<Match> summary = scoreBoard.getSummary();
+
+            // Then
+            List<Match> expectedSummary = List.of(
+                    createMatch("Uruguay", 6, "Italy", 6),
+                    createMatch("Spain", 10, "Brazil", 2)
+            );
+            assertEquals(expectedSummary, summary);
+        }
+        @Test
+        void getSummary_OnlyActiveMatches() {
+            // Given
+            startMatchWithScore("Spain", 10, "Brazil", 2);
+
+            startMatchWithScore("Uruguay", 6, "Italy", 6);
+            scoreBoard.finishMatch("Uruguay", "Italy");
+
+            // When
+            List<Match> summary = scoreBoard.getSummary();
+
+            // Then: Only Spain vs Brazil is active.
+            // Uruguay vs Italy has been finished and should be removed from ScoreBoard.
+            List<Match> expectedSummary = List.of(
+                    createMatch("Spain", 10, "Brazil", 2)
+            );
+            assertEquals(expectedSummary, summary);
+        }
+
+        // a complete example from the requirements doc
+        @Test
+        void getSummary_activeMatches_orderedByTotalScore_andMostRecentlyStarted() {
+            // Given
+            startMatchWithScore("Mexico", 0, "Canada", 5);
+            startMatchWithScore("Spain", 10, "Brazil", 2);
+            startMatchWithScore("Germany", 2, "France", 2);
+            startMatchWithScore("Uruguay", 6, "Italy", 6);
+            startMatchWithScore("Argentina", 3, "Australia", 1);
+
+            // When
+            List<Match> summary = scoreBoard.getSummary();
+
+            // Then
+            List<Match> expectedSummary = List.of(
+                    createMatch("Uruguay", 6, "Italy", 6),
+                    createMatch("Spain", 10, "Brazil", 2),
+                    createMatch("Maxico", 0, "Canada", 5),
+                    createMatch("Argentina", 3, "Australia", 1),
+                    createMatch("Germany", 2, "France", 2)
+            );
+            assertEquals(expectedSummary, summary);
+        }
+
+        private static Match createMatch(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+            return new Match(homeTeam, homeTeamScore, awayTeam, awayTeamScore, true, Instant.now());
+        }
+
+        private void startMatchWithScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+            this.scoreBoard.startNewMatch(homeTeam, awayTeam);
+            this.scoreBoard.updateMatchScore(homeTeam, homeTeamScore, awayTeam, awayTeamScore);
+        }
+
     }
+
 }

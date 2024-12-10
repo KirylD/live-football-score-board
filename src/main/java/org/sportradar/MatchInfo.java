@@ -53,4 +53,8 @@ public class MatchInfo {
     public boolean isActive() {
         return isActive;
     }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
 }
