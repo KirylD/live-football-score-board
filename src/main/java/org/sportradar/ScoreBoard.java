@@ -13,7 +13,20 @@ import static org.sportradar.ScoreBoard.SportRadarException.matchNotFoundExcepti
 import static org.sportradar.ScoreBoard.SportRadarException.updateInactiveMatchException;
 
 /**
- * The Live Football World Cup Score Board
+ * The Live Football World Cup Score Board.
+ *
+ * <h1>Read/Write ratio
+ * <p>The 2026 World Cup will see <b>48 teams</b> competing.
+ * With a nature of Football (goals per game) and a number of parallel games
+ * it's expected that <b>Write rate is very small with very low concurrency</b>.
+ *
+ * <p>While lots of watchers (software clients in term) are expected
+ * meaning <b>very high Read rate and very high concurrency</b>.
+ *
+ * To favor Read operations as a basic access pattern,
+ * {@code TreeSet} has been chosen with immutable {@code Match} entities.
+ * What allows to give a live (low-latency) summary of WorldCup with already ordered set,
+ * but with slower Write ops as a tradeoff (but Write ops are rare with slow concurrency).
  *
  * <p>
  * todo list:
