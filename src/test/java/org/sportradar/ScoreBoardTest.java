@@ -6,13 +6,15 @@ import org.junit.jupiter.api.Test;
 import org.sportradar.ScoreBoard.Match;
 import org.sportradar.ScoreBoard.SportRadarException;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.InstantSource;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
@@ -33,34 +35,30 @@ class ScoreBoardTest {
         @Test
         void startNewMatch() {
             // Given
-            ScoreBoard scoreBoard = new ScoreBoard();
+            ScoreBoard scoreBoard = new ScoreBoard(() -> Instant.parse("2024-12-12T20:00:00.00Z"));
 
             // When
             Match match = scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
-            // Then: verify the new match has been created with correct properties
-            assertEquals(match.getHomeTeam(), "homeTeam");
-            assertEquals(0, match.getHomeTeamScore());
-            assertEquals(match.getAwayTeam(), "awayTeam");
-            assertEquals(0, match.getAwayTeamScore());
-            assertTrue(match.isActive());
-            // todo: verify creationTime, refactor
+            // Then
+            assertEquals(createMatch("homeTeam", 0, "awayTeam", 0, "2024-12-12T20:00:00.00Z"), match);
         }
 
-//        @Test
-//        void saveMatchToScoreBoard() {
-//            // Given
-//            ScoreBoard scoreBoard = new ScoreBoard();
-//
-//            // When
-//            Match match = scoreBoard.startNewMatch("homeTeam", "awayTeam");
-//
-//            // Then: verify the new match has been saved in ScoreBoard and became available
-//            List<Match> summary = scoreBoard.getSummary();
-//
-//            List.of(new Match("homeTeam", 0, "awayTeam", awayTeamScore, true, Instant.now()))
-//            assertEquals();
-//        }
+        @Test
+        void saveMatchToScoreBoard() {
+            // Given
+            ScoreBoard scoreBoard = new ScoreBoard(() -> Instant.parse("2024-12-12T20:00:00.00Z"));
+
+            // When
+            scoreBoard.startNewMatch("homeTeam", "awayTeam");
+
+            // Then: verify the new match has been saved in ScoreBoard and became available
+            List<Match> summary = scoreBoard.getSummary();
+
+            List<Match> expectedSummary = List.of(
+                createMatch("homeTeam", 0, "awayTeam", 0,  "2024-12-12T20:00:00.00Z"));
+            assertEquals(expectedSummary, summary);
+        }
 
         @Test
         void matchAlreadyRun() {
@@ -70,7 +68,7 @@ class ScoreBoardTest {
 
             // When start match which had been already started, then throw exception
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.startNewMatch("homeTeam", "awayTeam"));
+                () -> scoreBoard.startNewMatch("homeTeam", "awayTeam"));
         }
 
         // Verify expected error message per use case
@@ -79,16 +77,16 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.startNewMatch("", "awayTeam"));
+                () -> scoreBoard.startNewMatch("", "awayTeam"));
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.startNewMatch("homeTeam", ""));
+                () -> scoreBoard.startNewMatch("homeTeam", ""));
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.startNewMatch(null, "awayTeam"));
+                () -> scoreBoard.startNewMatch(null, "awayTeam"));
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.startNewMatch("homeTeam", null));
+                () -> scoreBoard.startNewMatch("homeTeam", null));
         }
 
         @Test
@@ -96,7 +94,7 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.startNewMatch("homeTeam", "homeTeam"));
+                () -> scoreBoard.startNewMatch("homeTeam", "homeTeam"));
         }
     }
 
@@ -106,15 +104,14 @@ class ScoreBoardTest {
         @Test
         void updateMatchScore() {
             // Given
-            ScoreBoard scoreBoard = new ScoreBoard();
+            ScoreBoard scoreBoard = new ScoreBoard(() -> Instant.parse("2024-12-12T20:00:00.00Z"));
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When
             Match match = scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0);
 
             // Then
-            assertEquals(1, match.getHomeTeamScore());
-            assertEquals(0, match.getAwayTeamScore());
+            assertEquals(createMatch("homeTeam", 1, "awayTeam", 0, "2024-12-12T20:00:00.00Z"), match);
         }
 
         @Test
@@ -126,7 +123,7 @@ class ScoreBoardTest {
 
             // When
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0));
+                () -> scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0));
         }
 
         @Test
@@ -137,7 +134,7 @@ class ScoreBoardTest {
 
             // When-Then
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.updateMatchScore("homeTeamTypo", 1, "awayTeam", 0));
+                () -> scoreBoard.updateMatchScore("homeTeamTypo", 1, "awayTeam", 0));
         }
 
         @Test
@@ -145,8 +142,8 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(SportRadarException.class, () ->
-                            scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0),
-                    "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
+                    scoreBoard.updateMatchScore("homeTeam", 1, "awayTeam", 0),
+                "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
         }
 
         @Test
@@ -155,12 +152,12 @@ class ScoreBoardTest {
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.updateMatchScore("homeTeam", -1, "awayTeam", 0),
-                    "Score values must be positive but given homeTeam [-1], awayTeam [0]");
+                () -> scoreBoard.updateMatchScore("homeTeam", -1, "awayTeam", 0),
+                "Score values must be positive but given homeTeam [-1], awayTeam [0]");
 
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.updateMatchScore("homeTeam", 0, "awayTeam", -1),
-                    "Score value must be positive but given homeTeam [0], awayTeam [-1]");
+                () -> scoreBoard.updateMatchScore("homeTeam", 0, "awayTeam", -1),
+                "Score value must be positive but given homeTeam [0], awayTeam [-1]");
         }
 
         @Test
@@ -168,7 +165,7 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.updateMatchScore("homeTeam", 1, "homeTeam", 0));
+                () -> scoreBoard.updateMatchScore("homeTeam", 1, "homeTeam", 0));
         }
     }
 
@@ -177,18 +174,14 @@ class ScoreBoardTest {
         @Test
         void finishMatch() {
             // Given
-            ScoreBoard scoreBoard = new ScoreBoard();
+            ScoreBoard scoreBoard = new ScoreBoard(() -> Instant.parse("2024-12-12T20:00:00.00Z"));
             scoreBoard.startNewMatch("homeTeam", "awayTeam");
 
             // When
             Match finishedMatch = scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             // Then matched finished
-            assertEquals("homeTeam", finishedMatch.getHomeTeam());
-            assertEquals(0, finishedMatch.getHomeTeamScore());
-            assertEquals("awayTeam", finishedMatch.getAwayTeam());
-            assertEquals(0, finishedMatch.getAwayTeamScore());
-            assertFalse(finishedMatch.isActive());
+            assertEquals(new Match("homeTeam", 0, "awayTeam", 0, false, Instant.parse("2024-12-12T20:00:00.00Z")), finishedMatch);
         }
 
         @Test
@@ -198,8 +191,8 @@ class ScoreBoardTest {
 
             // When
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.finishMatch("homeTeam", "awayTeam"),
-                    "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
+                () -> scoreBoard.finishMatch("homeTeam", "awayTeam"),
+                "Match 'homeTeam' [homeTeam] and 'awayTeam' [awayTeam] doesn't exist");
         }
 
         @Test
@@ -210,7 +203,7 @@ class ScoreBoardTest {
             scoreBoard.finishMatch("homeTeam", "awayTeam");
 
             assertThrows(SportRadarException.class,
-                    () -> scoreBoard.finishMatch("homeTeam", "awayTeam"));
+                () -> scoreBoard.finishMatch("homeTeam", "awayTeam"));
         }
 
         @Test
@@ -218,7 +211,7 @@ class ScoreBoardTest {
             ScoreBoard scoreBoard = new ScoreBoard();
 
             assertThrows(IllegalArgumentException.class,
-                    () -> scoreBoard.finishMatch("homeTeam", "homeTeam"));
+                () -> scoreBoard.finishMatch("homeTeam", "homeTeam"));
         }
 
     }
@@ -227,45 +220,46 @@ class ScoreBoardTest {
     public class Summary {
 
         private ScoreBoard scoreBoard;
+        private DynamicInstantSource instantSource;
 
         @BeforeEach
         public void setUp() {
-            scoreBoard = new ScoreBoard();
+            instantSource = new DynamicInstantSource();
+            scoreBoard = new ScoreBoard(instantSource);
         }
 
         @Test
         void getSummary_orderedByTotalScore() {
             // Given
-            startMatchWithScore("Germany", 2, "France", 2);
-            startMatchWithScore("Mexico", 0, "Canada", 5);
-            startMatchWithScore("Spain", 10, "Brazil", 2);
+            runMatch("Germany", 2, "France", 2, "2024-12-12T20:00:00.00Z");
+            runMatch("Mexico", 0, "Canada", 5, "2024-12-12T20:00:00.00Z");
+            runMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z");
 
             // When
             List<Match> summary = scoreBoard.getSummary();
 
             // Then
             List<Match> expectedSummary = List.of(
-                    createMatch("Spain", 10, "Brazil", 2),
-                    createMatch("Maxico", 0, "Canada", 5),
-                    createMatch("Germany", 2, "France", 2)
+                createMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z"),
+                createMatch("Mexico", 0, "Canada", 5, "2024-12-12T20:00:00.00Z"),
+                createMatch("Germany", 2, "France", 2, "2024-12-12T20:00:00.00Z")
             );
             assertEquals(expectedSummary, summary);
         }
 
-        // TODO: refactor to allow to test Instant (time)
         @Test
         void getSummary_orderedByTotalScore_andMostRecentlyStarted() {
             // Given
-            startMatchWithScore("Spain", 10, "Brazil", 2);
-            startMatchWithScore("Uruguay", 6, "Italy", 6);
+            runMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z");
+            runMatch("Uruguay", 6, "Italy", 6, "2024-12-12T21:00:00.00Z");
 
             // When
             List<Match> summary = scoreBoard.getSummary();
 
             // Then
             List<Match> expectedSummary = List.of(
-                    createMatch("Uruguay", 6, "Italy", 6),
-                    createMatch("Spain", 10, "Brazil", 2)
+                createMatch("Uruguay", 6, "Italy", 6, "2024-12-12T21:00:00.00Z"),
+                createMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z")
             );
             assertEquals(expectedSummary, summary);
         }
@@ -273,9 +267,9 @@ class ScoreBoardTest {
         @Test
         void getSummary_OnlyActiveMatches() {
             // Given
-            startMatchWithScore("Spain", 10, "Brazil", 2);
+            runMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z");
 
-            startMatchWithScore("Uruguay", 6, "Italy", 6);
+            runMatch("Uruguay", 6, "Italy", 6, "2024-12-12T20:00:00.00Z");
             scoreBoard.finishMatch("Uruguay", "Italy");
 
             // When
@@ -284,7 +278,7 @@ class ScoreBoardTest {
             // Then: Only Spain vs Brazil is active.
             // Uruguay vs Italy has been finished and should be removed from ScoreBoard.
             List<Match> expectedSummary = List.of(
-                    createMatch("Spain", 10, "Brazil", 2)
+                createMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:00.00Z")
             );
             assertEquals(expectedSummary, summary);
         }
@@ -293,35 +287,55 @@ class ScoreBoardTest {
         @Test
         void getSummary_activeMatches_orderedByTotalScore_andMostRecentlyStarted() {
             // Given
-            startMatchWithScore("Mexico", 0, "Canada", 5);
-            startMatchWithScore("Spain", 10, "Brazil", 2);
-            startMatchWithScore("Germany", 2, "France", 2);
-            startMatchWithScore("Uruguay", 6, "Italy", 6);
-            startMatchWithScore("Argentina", 3, "Australia", 1);
+            runMatch("Mexico", 0, "Canada", 5, "2024-12-12T20:00:00.00Z");
+            runMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:01.00Z");
+            runMatch("Germany", 2, "France", 2, "2024-12-12T20:00:02.00Z");
+            runMatch("Uruguay", 6, "Italy", 6, "2024-12-12T20:00:03.00Z");
+            runMatch("Argentina", 3, "Australia", 1, "2024-12-12T20:00:04.00Z");
 
             // When
             List<Match> summary = scoreBoard.getSummary();
 
             // Then
             List<Match> expectedSummary = List.of(
-                    createMatch("Uruguay", 6, "Italy", 6),
-                    createMatch("Spain", 10, "Brazil", 2),
-                    createMatch("Maxico", 0, "Canada", 5),
-                    createMatch("Argentina", 3, "Australia", 1),
-                    createMatch("Germany", 2, "France", 2)
+                createMatch("Uruguay", 6, "Italy", 6, "2024-12-12T20:00:03.00Z"),
+                createMatch("Spain", 10, "Brazil", 2, "2024-12-12T20:00:01.00Z"),
+                createMatch("Mexico", 0, "Canada", 5, "2024-12-12T20:00:00.00Z"),
+                createMatch("Argentina", 3, "Australia", 1, "2024-12-12T20:00:04.00Z"),
+                createMatch("Germany", 2, "France", 2, "2024-12-12T20:00:02.00Z")
             );
             assertEquals(expectedSummary, summary);
         }
 
-        private static Match createMatch(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
-            return new Match(homeTeam, homeTeamScore, awayTeam, awayTeamScore, true, Instant.now());
-        }
-
-        private void startMatchWithScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
+        private void runMatch(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore, String startedAt) {
+            instantSource.setInstant(Instant.parse(startedAt));
             this.scoreBoard.startNewMatch(homeTeam, awayTeam);
             this.scoreBoard.updateMatchScore(homeTeam, homeTeamScore, awayTeam, awayTeamScore);
         }
 
+
+        /**
+         * Allows dynamically change the {@code instant} at runtime only through setter.
+         */
+        public static class DynamicInstantSource implements InstantSource {
+
+            private Instant instant;
+
+            @Override
+            public Instant instant() {
+                if (instant == null)
+                    throw new IllegalStateException("DynamicInstantSource is not configured");
+                return instant;
+            }
+
+            public void setInstant(Instant instant) {
+                this.instant = instant;
+            }
+        }
+    }
+
+    private static Match createMatch(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore, String startedAt) {
+        return new Match(homeTeam, homeTeamScore, awayTeam, awayTeamScore, true, Instant.parse(startedAt));
     }
 
 }

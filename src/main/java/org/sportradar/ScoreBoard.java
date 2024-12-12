@@ -4,9 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.time.InstantSource;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.TreeSet;
 
 import static org.sportradar.ScoreBoard.SportRadarException.matchAlreadyRunException;
 import static org.sportradar.ScoreBoard.SportRadarException.matchNotFoundException;
@@ -22,7 +24,7 @@ import static org.sportradar.ScoreBoard.SportRadarException.updateInactiveMatchE
  *
  * <p>While lots of watchers (software clients in term) are expected
  * meaning <b>very high Read rate and very high concurrency</b>.
- *
+ * <p>
  * To favor Read operations as a basic access pattern,
  * {@code TreeSet} has been chosen with immutable {@code Match} entities.
  * What allows to give a live (low-latency) summary of WorldCup with already ordered set,
@@ -30,7 +32,6 @@ import static org.sportradar.ScoreBoard.SportRadarException.updateInactiveMatchE
  *
  * <p>
  * todo list:
- * - provide javadoc
  * - consider to separate Read & Write operations (CQSR) to decouple: Start, Update, Finish vs Summary
  * - consider 3-rd party lib for validation
  *
@@ -40,10 +41,18 @@ public class ScoreBoard {
 
     public static final Logger log = LoggerFactory.getLogger(ScoreBoard.class);
 
-    private final TreeSet<Match> matches;
+    // TODO: choose an appropriate collection based on access patterns and Read/Write ration
+    private final List<Match> matches;
+    private final InstantSource instantSource;
+
+    ScoreBoard(InstantSource instantSource) {
+        this.instantSource = instantSource;
+        this.matches = new ArrayList<>();
+    }
 
     public ScoreBoard() {
-        matches = new TreeSet<>();
+        this.matches = new ArrayList<>();
+        instantSource = InstantSource.system();
     }
 
     public void validateScore(int homeTeamScore, int awayTeamScore) {
@@ -66,7 +75,6 @@ public class ScoreBoard {
      * @param homeTeam the team which plays at home
      * @param awayTeam the team which plays away
      * @return the started Match
-     *
      * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
      * @throws SportRadarException if the Match has been already run
      */
@@ -75,7 +83,7 @@ public class ScoreBoard {
         validateTeams(homeTeam, awayTeam);
         validateMatchNotRun(homeTeam, awayTeam);
 
-        Match match = Match.startMatch(homeTeam, awayTeam);
+        Match match = Match.startMatch(homeTeam, awayTeam, instantSource.instant());
         matches.add(match);
         return match;
     }
@@ -91,14 +99,13 @@ public class ScoreBoard {
     /**
      * Updates the score for the Match of given {@code homeTeam} and {@code awayTeam}.
      *
-     * @param homeTeam the team which plays at home
+     * @param homeTeam      the team which plays at home
      * @param homeTeamScore the new score value of homeTeam
-     * @param awayTeam the team which plays away
+     * @param awayTeam      the team which plays away
      * @param awayTeamScore the new score value of homeTeam
      * @return the updated Match
-     *
      * @throws SportRadarException if the Match not found with the given {@code homeTeam} and {@code awayTeam},
-     *          or the Match is Not in progress
+     *                             or the Match is Not in progress
      * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
      * @throws SportRadarException if any score is a negative value
      */
@@ -107,11 +114,18 @@ public class ScoreBoard {
         validateTeams(homeTeam, awayTeam);
         validateScore(homeTeamScore, awayTeamScore);
 
-        Match foundMatch = findMatchAndRemove(homeTeam, awayTeam);
-
-        Match match = foundMatch.updateScore(homeTeamScore, awayTeamScore);
-        matches.add(match);
-        return match;
+        for (int i = 0; i < matches.size(); i++) {
+            Match match = matches.get(i);
+            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
+                if (!match.isActive) {
+                    throw updateInactiveMatchException(homeTeam, awayTeam);
+                }
+                Match updatedMatch = match.updateScore(homeTeamScore, awayTeamScore);
+                matches.set(i, updatedMatch);
+                return updatedMatch;
+            }
+        }
+        throw matchNotFoundException(homeTeam, awayTeam);
     }
 
     /**
@@ -120,18 +134,27 @@ public class ScoreBoard {
      * @param homeTeam the team which plays at home
      * @param awayTeam the team which plays away
      * @return the finished Match
-     *
      * @throws SportRadarException if the Match not found with the given {@code homeTeam} and {@code awayTeam},
-     *         or the Match is Not in progress
+     *                             or the Match is Not in progress
      * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
      */
     public Match finishMatch(String homeTeam, String awayTeam) {
         log.info("Finish the Match between homeTeam [{}] and awayTeam [{}]", homeTeam, awayTeam);
         validateTeams(homeTeam, awayTeam);
-        Match existingMatch = findMatchAndRemove(homeTeam, awayTeam);
-        Match finishedMatch = existingMatch.finish();
-        matches.add(finishedMatch);
-        return finishedMatch;
+
+        for (int i = 0; i < matches.size(); i++) {
+            Match match = matches.get(i);
+            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
+                if (!match.isActive) {
+                    throw updateInactiveMatchException(homeTeam, awayTeam);
+                }
+                Match finishedMatch = match.finish();
+                matches.set(i, finishedMatch);
+                return finishedMatch;
+            }
+        }
+
+        throw matchNotFoundException(homeTeam, awayTeam);
     }
 
     private Match findMatchAndRemove(String homeTeam, String awayTeam) {
@@ -168,7 +191,11 @@ public class ScoreBoard {
     // TODO: Cache the summary, as it's likely the Read rate is much higher than Update and it's expensive
     // return read-only copies, do not allow clients to update objects directly
     public List<Match> getSummary() {
-        return List.copyOf(matches);
+        return matches.stream()
+                .filter(Match::isActive)
+                .sorted(Comparator.<Match>comparingInt(match -> match.homeTeamScore + match.awayTeamScore).reversed()
+                        .thenComparing(Comparator.<Match, Instant>comparing(o -> o.startedAt).reversed()))
+                .toList();
     }
 
     /**
@@ -177,28 +204,11 @@ public class ScoreBoard {
      * <p>
      * Use the public API to effect the {@link ScoreBoard}, objects are immutable.
      */
-    public static class Match implements Comparable<Match> {
-        private final String homeTeam;
-        private final int homeTeamScore;
-        private final String awayTeam;
+    public record Match(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore,
+                        boolean isActive, Instant startedAt) {
 
-        private final int awayTeamScore;
-
-        private final boolean isActive;
-
-        private final Instant startedAt;
-
-        public Match(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore, boolean isActive, Instant startedAt) {
-            this.homeTeam = homeTeam;
-            this.homeTeamScore = homeTeamScore;
-            this.awayTeam = awayTeam;
-            this.awayTeamScore = awayTeamScore;
-            this.isActive = isActive;
-            this.startedAt = startedAt;
-        }
-
-        public static Match startMatch(String homeTeam, String awayTeam) {
-            return new Match(homeTeam, 0, awayTeam, 0, true, Instant.now());
+        public static Match startMatch(String homeTeam, String awayTeam, Instant startedAt) {
+            return new Match(homeTeam, 0, awayTeam, 0, true, startedAt);
         }
 
 
@@ -209,53 +219,7 @@ public class ScoreBoard {
         public Match finish() {
             return new Match(this.homeTeam, homeTeamScore, this.awayTeam, awayTeamScore, false, this.startedAt);
         }
-
-        public String getHomeTeam() {
-            return homeTeam;
-        }
-
-        public int getHomeTeamScore() {
-            return homeTeamScore;
-        }
-
-        public String getAwayTeam() {
-            return awayTeam;
-        }
-
-        public int getAwayTeamScore() {
-            return awayTeamScore;
-        }
-
-        public boolean isActive() {
-            return isActive;
-        }
-
-        public Instant getStartedAt() {
-            return startedAt;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            Match match = (Match) o;
-
-            if (!homeTeam.equals(match.homeTeam)) return false;
-            if (homeTeamScore != match.homeTeamScore) return false;
-            if (!awayTeam.equals(match.awayTeam)) return false;
-            if (awayTeamScore != match.awayTeamScore) return false;
-            if (isActive != match.isActive) return false;
-            return startedAt.equals(match.startedAt);
-        }
-
-        // TODO: provide implementation, mock provided to migrate to immutable Match entity from Teams & MatchInfo
-        @Override
-        public int compareTo(Match o) {
-            return 0;
-        }
     }
-
 
     public static class SportRadarException extends RuntimeException {
 
