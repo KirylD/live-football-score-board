@@ -7,8 +7,8 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static org.sportradar.ScoreBoard.SportRadarException.matchAlreadyRunException;
 import static org.sportradar.ScoreBoard.SportRadarException.matchNotFoundException;
@@ -26,13 +26,12 @@ import static org.sportradar.ScoreBoard.SportRadarException.updateInactiveMatchE
  * meaning <b>very high Read rate and very high concurrency</b>.
  * <p>
  * To favor Read operations as a basic access pattern,
- * {@code TreeSet} has been chosen with immutable {@code Match} entities.
- * What allows to give a live (low-latency) summary of WorldCup with already ordered set,
- * but with slower Write ops as a tradeoff (but Write ops are rare with slow concurrency).
+ * {@code Summary} has been calculated eagerly on any Match changes.
+ * What allows to give a live (low-latency) summary of WorldCup with zero computations,
+ * but with slower Write ops as a tradeoff.
  *
  * <p>
  * todo list:
- * - consider to separate Read & Write operations (CQSR) to decouple: Start, Update, Finish vs Summary
  * - consider 3-rd party lib for validation
  *
  * @author Kiryl Drabysheuski
@@ -41,32 +40,30 @@ public class ScoreBoard {
 
     public static final Logger log = LoggerFactory.getLogger(ScoreBoard.class);
 
-    // TODO: choose an appropriate collection based on access patterns and Read/Write ration
+    // expected ~50 matches with rare changes (goals): World Cup 2026 - 48 competitors
     private final List<Match> matches;
+
+    // Much preferences are given to Read ops: expected incredibly high number of watchers of world football cup
+    // Calculate Summary on changes with unmodifiable List and immutable objects: eagerly populated cache of Summary on any Match changes
+    private volatile List<Match> summary;
+
     private final InstantSource instantSource;
+
+    private final ReentrantReadWriteLock reentrantLock = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
+    private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
+
 
     ScoreBoard(InstantSource instantSource) {
         this.instantSource = instantSource;
         this.matches = new ArrayList<>();
+        summary = new ArrayList<>();
     }
 
     public ScoreBoard() {
         this.matches = new ArrayList<>();
         instantSource = InstantSource.system();
-    }
-
-    public void validateScore(int homeTeamScore, int awayTeamScore) {
-        if (homeTeamScore < 0 || awayTeamScore < 0)
-            throw new SportRadarException("Score values must be positive but given homeTeam [%s], awayTeam [%s]"
-                    .formatted(homeTeamScore, awayTeamScore));
-    }
-
-    public void validateTeams(String homeTeam, String awayTeam) {
-        if ((homeTeam == null || homeTeam.isBlank()) || (awayTeam == null || awayTeam.isBlank()))
-            throw new IllegalArgumentException("homeTeam [%s] & awayTeam [%s] params can't be Blank or null"
-                    .formatted(homeTeam, awayTeam));
-        if (homeTeam.equals(awayTeam))
-            throw new IllegalArgumentException("homeTeam can't be equal awayTeam: " + homeTeam);
+        summary = new ArrayList<>();
     }
 
     /**
@@ -75,24 +72,21 @@ public class ScoreBoard {
      * @param homeTeam the team which plays at home
      * @param awayTeam the team which plays away
      * @return the started Match
-     * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
      * @throws SportRadarException if the Match has been already run
      */
     public Match startNewMatch(String homeTeam, String awayTeam) {
         log.info("Start new Match: homeTeam [{}], awayTeam [{}]", homeTeam, awayTeam);
         validateTeams(homeTeam, awayTeam);
-        validateMatchNotRun(homeTeam, awayTeam);
 
-        Match match = Match.startMatch(homeTeam, awayTeam, instantSource.instant());
-        matches.add(match);
-        return match;
-    }
-
-    private void validateMatchNotRun(String homeTeam, String awayTeam) {
-        for (Match match : matches) {
-            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
-                throw matchAlreadyRunException(homeTeam, awayTeam);
-            }
+        writeLock.lock();
+        try {
+            validateMatchNotRun(homeTeam, awayTeam);
+            Match match = Match.startMatch(homeTeam, awayTeam, instantSource.instant());
+            matches.add(match);
+            summary = calculateSummary(matches);
+            return match;
+        } finally {
+            writeLock.unlock();
         }
     }
 
@@ -106,26 +100,30 @@ public class ScoreBoard {
      * @return the updated Match
      * @throws SportRadarException if the Match not found with the given {@code homeTeam} and {@code awayTeam},
      *                             or the Match is Not in progress
-     * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
-     * @throws SportRadarException if any score is a negative value
      */
     public Match updateMatchScore(String homeTeam, int homeTeamScore, String awayTeam, int awayTeamScore) {
         log.info("Update Match [{}] vs [{}] to Score [{}], [{}]", homeTeam, awayTeam, homeTeamScore, awayTeamScore);
         validateTeams(homeTeam, awayTeam);
         validateScore(homeTeamScore, awayTeamScore);
 
-        for (int i = 0; i < matches.size(); i++) {
-            Match match = matches.get(i);
-            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
-                if (!match.isActive) {
-                    throw updateInactiveMatchException(homeTeam, awayTeam);
+        writeLock.lock();
+        try {
+            for (int i = 0; i < matches.size(); i++) {
+                Match match = matches.get(i);
+                if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
+                    if (!match.isActive) {
+                        throw updateInactiveMatchException(homeTeam, awayTeam);
+                    }
+                    Match updatedMatch = match.updateScore(homeTeamScore, awayTeamScore);
+                    matches.set(i, updatedMatch);
+                    summary = calculateSummary(matches);
+                    return updatedMatch;
                 }
-                Match updatedMatch = match.updateScore(homeTeamScore, awayTeamScore);
-                matches.set(i, updatedMatch);
-                return updatedMatch;
             }
+            throw matchNotFoundException(homeTeam, awayTeam);
+        } finally {
+            writeLock.unlock();
         }
-        throw matchNotFoundException(homeTeam, awayTeam);
     }
 
     /**
@@ -136,46 +134,31 @@ public class ScoreBoard {
      * @return the finished Match
      * @throws SportRadarException if the Match not found with the given {@code homeTeam} and {@code awayTeam},
      *                             or the Match is Not in progress
-     * @throws SportRadarException if either {@code homeTeam} or {@code awayTeam} is {@code null} or empty
      */
     public Match finishMatch(String homeTeam, String awayTeam) {
         log.info("Finish the Match between homeTeam [{}] and awayTeam [{}]", homeTeam, awayTeam);
         validateTeams(homeTeam, awayTeam);
 
-        for (int i = 0; i < matches.size(); i++) {
-            Match match = matches.get(i);
-            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
-                if (!match.isActive) {
-                    throw updateInactiveMatchException(homeTeam, awayTeam);
+        writeLock.lock();
+        try {
+            for (int i = 0; i < matches.size(); i++) {
+                Match match = matches.get(i);
+                if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
+                    if (!match.isActive) {
+                        throw updateInactiveMatchException(homeTeam, awayTeam);
+                    }
+                    Match finishedMatch = match.finish();
+                    matches.set(i, finishedMatch);
+                    summary = calculateSummary(matches);
+                    return finishedMatch;
                 }
-                Match finishedMatch = match.finish();
-                matches.set(i, finishedMatch);
-                return finishedMatch;
             }
-        }
 
-        throw matchNotFoundException(homeTeam, awayTeam);
-    }
-
-    private Match findMatchAndRemove(String homeTeam, String awayTeam) {
-        Match foundMatch = null;
-        for (Iterator<Match> iterator = matches.iterator(); iterator.hasNext(); ) {
-            Match match = iterator.next();
-            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
-                if (!match.isActive) {
-                    throw updateInactiveMatchException(homeTeam, awayTeam);
-                }
-                foundMatch = match;
-                iterator.remove();
-                break;
-            }
-        }
-        if (foundMatch == null) {
             throw matchNotFoundException(homeTeam, awayTeam);
+        } finally {
+            writeLock.unlock();
         }
-        return foundMatch;
     }
-
 
     /**
      * Get a summary of matches in progress ordered by their total score. The matches with the
@@ -188,14 +171,45 @@ public class ScoreBoard {
      *
      * @return the unmodifiable and ordered list of immutable {@link Match} objects
      */
-    // TODO: Cache the summary, as it's likely the Read rate is much higher than Update and it's expensive
-    // return read-only copies, do not allow clients to update objects directly
     public List<Match> getSummary() {
+        readLock.lock();
+        try {
+            return summary;
+        } finally {
+            readLock.lock();
+        }
+    }
+
+    private List<Match> calculateSummary(List<Match> matches) {
         return matches.stream()
                 .filter(Match::isActive)
                 .sorted(Comparator.<Match>comparingInt(match -> match.homeTeamScore + match.awayTeamScore).reversed()
                         .thenComparing(Comparator.<Match, Instant>comparing(o -> o.startedAt).reversed()))
                 .toList();
+    }
+
+
+    private void validateMatchNotRun(String homeTeam, String awayTeam) {
+        for (Match match : matches) {
+            if (match.homeTeam.equals(homeTeam) && match.awayTeam.equals(awayTeam)) {
+                throw matchAlreadyRunException(homeTeam, awayTeam);
+            }
+        }
+    }
+
+
+    public void validateScore(int homeTeamScore, int awayTeamScore) {
+        if (homeTeamScore < 0 || awayTeamScore < 0)
+            throw new SportRadarException("Score values must be positive but given homeTeam [%s], awayTeam [%s]"
+                    .formatted(homeTeamScore, awayTeamScore));
+    }
+
+    public void validateTeams(String homeTeam, String awayTeam) {
+        if ((homeTeam == null || homeTeam.isBlank()) || (awayTeam == null || awayTeam.isBlank()))
+            throw new IllegalArgumentException("homeTeam [%s] & awayTeam [%s] params can't be Blank or null"
+                    .formatted(homeTeam, awayTeam));
+        if (homeTeam.equals(awayTeam))
+            throw new IllegalArgumentException("homeTeam can't be equal awayTeam: " + homeTeam);
     }
 
     /**
@@ -217,7 +231,7 @@ public class ScoreBoard {
         }
 
         public Match finish() {
-            return new Match(this.homeTeam, homeTeamScore, this.awayTeam, awayTeamScore, false, this.startedAt);
+            return new Match(this.homeTeam, this.homeTeamScore, this.awayTeam, this.awayTeamScore, false, this.startedAt);
         }
     }
 
