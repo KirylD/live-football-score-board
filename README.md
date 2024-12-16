@@ -41,3 +41,7 @@ The 'summary index' will be updated as now - on changes of Matches.
 
 It would improve the Write operations as it will be based on a Key access only. 
 But this implementation will be harder to evaluate and would violate the requirements to keep it simple as much.
+
+### ToDo list
+* Provide tests to cover multithreading access to ScoreBoard
+* Test performance and load with [Java Microbenchmark Harness (JMH)](https://github.com/openjdk/jmh)

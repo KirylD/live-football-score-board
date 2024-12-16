@@ -6,14 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.sportradar.ScoreBoard.Match;
 import org.sportradar.ScoreBoard.SportRadarException;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
@@ -30,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ScoreBoardTest {
 
     @Nested
-    public class StartNewMatchInfo {
+    public class StartMatch {
 
         @Test
         void startNewMatch() {
@@ -99,7 +96,7 @@ class ScoreBoardTest {
     }
 
     @Nested
-    public class UpdateMatchScoreInfo {
+    public class UpdateMatchScore {
 
         @Test
         void updateMatchScore() {
